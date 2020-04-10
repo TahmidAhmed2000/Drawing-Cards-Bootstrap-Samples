@@ -1,0 +1,281 @@
+---
+title: "Drawing Cards Bootstrapped Samples"
+author: "Tahmid Ahmed"
+date: "4/10/2020"
+output: html_document
+---
+
+```{r setup, include = FALSE}
+# Loaded all libraries that I will need for this pset. 
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(scales)
+library(magrittr)
+library(gt)
+library(infer)
+library(readr)
+library(janitor)
+library(reprex)
+library(rvest)
+library(purrr)
+library(haven)
+```
+
+```{r creating deck, echo = FALSE}
+# I initially had a tough time making the function, because I thought I could
+# not just put a tibble in my function as I thought a function had to calculate
+# something. However, I realized I can just put my tibble in my function as the
+# function could ouput the tibble I want. In addition, I learned about the paste
+# function, which can combine two coulmns and even include words to add after
+# the merged columns using sep.
+create_deck <- function() {
+tibble(
+  suit = c(rep("diamonds", 13), rep("hearts", 13), rep("clubs", 13), rep("spades", 13)),
+  value = c(rep(c("2","3","4", "5", "6", "7", "8", "9", "10", "J", "Q", "K", "A"), 4)),
+  points = c(rep(c("2","3","4", "5", "6", "7", "8", "9", "10", "10", "10", "10", "10"), 4))) %>%
+  mutate(name = paste(value, suit, sep = " of ")) %>%
+  select(value, points, suit, name)
+}
+```
+
+```{r drawing card function, echo = FALSE}
+# I had trouble with my function for outputting the three reports, but I
+# realized I had to pull(report) at the end of my function in order to get three
+# designated outputs. In addition, I checked my function based on the pset by
+# changing what my report equals and I got the same outputs as the pset with the
+# same set.seed. We also use rep_sample_n with replace = False because we will
+# be sampling from create_deck.
+set.seed(1)
+draw_card <- function(n, report) {
+  deck = create_deck()
+  rep_sample_n(deck, n, replace = FALSE) %>%
+  pull(report)
+}
+```
+
+## 1A. 
+```{r 1a, echo = FALSE}
+# Doing this was fairly simple as I already have the function and just set n = 4
+# and report = "name" based on what the pset says.
+set.seed(2)
+call_1a <- draw_card(n = 4, report = "name")
+print(call_1a)
+```
+
+## 1B
+```{r 1b, echo = FALSE}
+# To create this tibble, I first made a list of face_cards for the sake of
+# clarity when I use it in my tibble. I then made my tibble, which was easy to
+# make for the draw column. However, for the face column I used an ifelse
+# statement similar to what I did in the previous pset. Based on the previous
+# pset, which asked if the card is red, I used an ifelse statement so using the
+# same intuition I did something similar for this tibble. I then used gt
+# commands to make my table look pretty.
+set.seed(3)
+face_cards <- c("J", "Q", "K")
+set.seed(3)
+hands <- tibble(draw = map(rep(5, 100), ~ draw_card(n = 5, report = "value")),
+                face = map_lgl(draw, ~ ifelse(any(. %in% face_cards), TRUE, FALSE)))
+hands_plot <- hands %>%
+slice(1:5) %>%
+gt() %>%
+cols_label(face = "Face Cards?", draw = "Draw") %>%
+tab_header(title = "Hands of Five Cards",
+           subtitle = "Checking for Face Values")
+hands_plot
+``` 
+
+```{r 1C setup,echo = FALSE}
+# I called my functions to create tibbles that I may need later on for the pset.
+deck <- create_deck()
+twelve <- draw_card(12, report = "name")
+```
+
+## 1C
+
+```{r 1cp2, echo = FALSE}
+# This was fairly simple to do as I first created a 12 card deck using tibble
+# with my draw_card function. However, getting the name and points for my 12
+# card deck was tricky. However, I read on Piazza that I can join my twelve_deck
+# tibble with my deck tibble because the deck tibble has information on point
+# values. Thus, I did a left_join by = "name" to make my final tibble and
+# selecting name and points for the finish product. I really liked this problem
+# because it gave me a better intuition on the left_join command.
+set.seed(4)
+twelve_deck <- tibble(name = draw_card (12, report = "name"))
+twelve_sample <- twelve_deck %>% 
+  left_join(deck, by = "name") %>% 
+  select(name, points)
+plot_1C <- twelve_sample %>%
+  gt() %>%
+tab_header(title = "Hands of 12 Cards",
+           subtitle = "Checking for Name and Points") %>%
+cols_label(name = "Name", points = "Point Value")
+plot_1C
+```
+
+
+## 1D
+```{r 1D, echo = FALSE}
+# Based on the pset, the mean they calculated is the mean of the whole deck.
+# Thus, I used deck to calculate the mean. This was a fairly standard mad lib,
+# so I summarized to find mean_points and then pulling at the end. I would say
+# that it is important to always at the pipe at end just for syntax.
+mean_points <- deck %>%
+  select(points) %>%
+  mutate(points = as.numeric(points)) %>%
+  summarize(mean_points = mean(points)) %>%
+  pull() %>%
+  round(digits = 3)
+```
+
+The mean number of points in our entire deck is `r mean_points`.
+
+```{r 1E setup, echo = FALSE}
+# To make the bootstrap sample, they key command I used was rep_sample_n to get
+# multiple samples for my twelve card deck. Creating the bootstrap_sample was
+# intuitive as we practiced this during class. What I should remember is that we
+# must do group_by(replicate) in order to get the bootstrap sample means. I
+# orginally did not do this and was having trouble getting an output, but I
+# remembered in class that we are supposed to do group_by(replicate) since we
+# are using multiple samples.
+set.seed(5)
+bootstrap_sample <- twelve_sample %>%
+  rep_sample_n(size = 12, reps = 1000, replace = TRUE) %>%
+  select(replicate, name, points) %>% 
+  group_by(replicate)%>% 
+  summarize(mean_bootstrap_sample = mean(as.numeric(points)))
+```
+
+## 1E
+```{r 1E graph, echo = FALSE}
+# To find the mean of the bootstrapped samples, I just did
+# mean(bootstrap_sample$mean_bootstrap_sample). This is because I am basically
+# finding the average for all the averages of each sample. I can use "$" since
+# this is essentially a dataframe.
+total_mean <- mean(bootstrap_sample$mean_bootstrap_sample)
+# I finally got to the fun part to make my ggplot. I had trouble with some of
+# the aesthetics but I used the exam I have done before to do geom_vline and
+# Stack Exchange to adjust my aesthetics. From Piazza, I learned more
+# specifically of what colors to use. In addition, we will do
+# aes(mean_bootstrap_sample) in our ggplot, since we are looking at the mean of
+# the bootstrapped samples. I can use this chunk of code for the future when I
+# want to adjust aesthetics for my plots.
+set.seed(5)
+plot_1E <- ggplot(bootstrap_sample, aes(mean_bootstrap_sample)) +
+  geom_histogram(bins = 20) +
+  xlab("Points") +
+  ylab("Samples") +
+  labs(title = "Distribution of 1000 Bootstrapped Resamples", 
+       subtitle = "From original 12 card sample with mean  7.231") +
+ theme_classic()+
+ geom_vline(xintercept = as.numeric(total_mean), color = "sky blue") +
+ geom_text(aes(x=as.numeric(total_mean)), label = "Mean of Bootstrapped Samples", 
+           y = 55, angle =  90, color = "sky blue", vjust = -0.5) +
+ geom_vline(xintercept = as.numeric(mean_points), color = "pink") +
+ geom_text(aes(x = as.numeric(mean_points)), label = "Original Sample Mean", 
+           y = 55, angle = 90, color = "pink", vjust = 1.4)
+plot_1E
+```
+
+The mean of the bootstrapped samples (7.202) isn't exactly the same as the mean of the original sample (7.231) because the mean of the bootstrapped samples takes into account the means of many samples, which can create variability and thus a different mean, whereas the mean of our original sample does not take into account many samples and does not have variability. 
+
+
+## 1F
+```{r 1F, echo = FALSE}
+# I first created mean_bt to pull the mean of each bootstrap sample in our
+# bootstrap_sample. I will need to use this to make my tibble as this will have
+# all the means I need. Furthermore, I created the tibble but made sure I
+# created a level list for each confidence interval because when I make my
+# interval, I can use each level. Based on chapter 10, I essentially coded the
+# formula for confidence interval using map and paste. For the sake of
+# conciseness, I can use paste like how I did before to make my intervals have
+# parenthesis. The parenthesis are in between, but that does not make a
+# difference since it still shows the confidence interval.
+set.seed(5)
+mean_bt <- bootstrap_sample %>%
+  pull(mean_bootstrap_sample)
+plot_1F <- tibble(Level = c(0.80, 0.90, .95, .99)) %>%
+  mutate(Interval = map(Level, ~ paste("(", round(quantile(mean_bt,
+                        c((1 - .) / 2, 1 - ((1 - .) / 2))), digits = 1), ")", 
+                        sep = ""))) %>%
+  gt() %>%
+  tab_header(title = "Confidence Intervals for Average Point Value",
+             subtitle = "Bootstrapped Resamples on a 12 Card Hand") %>%
+  tab_source_note(source_note = "Original Sample Mean of 7.23")
+plot_1F
+```
+
+
+```{r 1G, echo = FALSE}
+# I first created my width_ci function because I know my tibble will use
+# width_ci function. Piazza gave me hints as to how to make the function, so I
+# essentially had to do sample_n and then rep_sample_n. This is because I first
+# need to make a sample of n cards from my create_deck using sample_n. Once I
+# get my sample, I can then use rep_sample_n in order to get replicates for that
+# specified sample size. To complete my function, I essentially use the formula
+# for a confidence interval and then subtract sample[[1]] from sample [[2]] to
+# get the width, which makes sense as they represent the ends of the confidence
+# interval.
+set.seed(6)
+width_ci <- function(n, level) {
+  sample <- create_deck() %>% 
+    sample_n(size = n, replace = FALSE) %>% 
+    rep_sample_n(size = n, reps = 1000, replace = TRUE) %>% 
+    group_by(replicate) %>% 
+    select(replicate, name, points) %>% 
+    summarize(bootstrap_mean = mean(as.numeric(points))) %>% 
+    pull(bootstrap_mean) %>% 
+    quantile(c((1 - level) / 2, (1 - level) / 2 + level)) %>% 
+    round(digits = 1)
+  
+  width = sample[[2]] - sample[[1]]
+  
+  width
+}
+# To make my tibble, the pset said to make the cards go from 2 to 52, so I just
+# did n = 2:52. I then mutated my confidence intervals at each specified level
+# using map_dbl and the function I made for width_ci. This was fairly simple to
+# do. However, class notes and the pset guidelines helped me better understand
+# pivot_longer and why I should use it here. It is because pivot_longer
+# increases the number of rows and decreases the number of columns, so I can
+# have a tibble that can work well with the ggplot I will make.
+set.seed(6)
+width_tibble <- tibble(n = 2:52) %>%
+mutate("90" = map_dbl(n,~width_ci(., .90))) %>%
+mutate("95" = map_dbl(n,~width_ci(., .95))) %>%
+mutate("99" = map_dbl(n,~width_ci(., .99))) %>%
+pivot_longer(cols = c("90", "95", "99"), names_to = "confidence_level", 
+             values_to = "width")
+```
+
+## 1G
+```{r 1G graph, echo = FALSE}
+# To make the ggplot, I essentially used geom_point and made my x the sample
+# size and the y the width of the confidence interval. I had trouble formatting
+# the legend, but I saw on Stack Exchange that I just have to specify what color
+# equals to in my labs. This makes more sense since I made geom_point(aes(color
+# = confidence_level)).
+set.seed(6)
+graphic_1G <- ggplot(width_tibble, aes(n, width)) +
+geom_point(aes(color = confidence_level)) +
+theme_classic() +
+labs(title = "Width of Bootstrapped Confidence Intervals For Different Sample Sizes",
+     subtitle = "Calculating the Mean Point Value from a Deck of Cards",
+     x = "Sample Size",
+     y = "Width of Confidence Interval (Percentile Method)",
+     color = "Confidence Level")
+graphic_1G
+```
+
+## Question 2: Shiny
+
+```{r shiny 2, echo = FALSE}
+# To make the shiny app, I generally followed the rules on the pset. However, I
+# found the Shiny Written Tutorial to be helpful. By using this, I was able to
+# make my app. I should come back to the written tutorials for my final project.
+```
+
+https://tahmid-ahmed.shinyapps.io/ps_6_shiny/
+
+Colloborators: Carina Peng, Connor Riordan
